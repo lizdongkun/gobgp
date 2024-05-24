@@ -12,8 +12,17 @@ import attribute_pb2
 
 _TIMEOUT_SECONDS = 1000
 
+#added by kun: ipv6 address pre-processing to fit in the script
+def ipv6_to_intlist(ipv6):
+    groups = ipv6.split(":")
+    result = []
+    for group in groups:
+        group = int(group, 16)
+        result.append(group)
+    return result
 
-#added by kun: label processing and update to carry ttl and s_flag information
+
+#added by kun: label processing to carry ttl and s_flag information
 def label_offset12(label):
     loop = 1
     while loop <= 12:
@@ -39,6 +48,7 @@ def label_update(labels):
 
 
 
+#original main funtion
 def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, nh):
     """
     inject or delete an route with <ACME>-CIDR and <ACME>-SCRUBBING community
@@ -64,7 +74,7 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
     segments = []
     # bgp-sr-te safi
     family = gobgp_pb2.Family(
-        afi=gobgp_pb2.Family.AFI_IP, safi=gobgp_pb2.Family.SAFI_SR_POLICY
+        afi=gobgp_pb2.Family.AFI_IP6, safi=gobgp_pb2.Family.SAFI_SR_POLICY
     )
 
     # sr-te policy nlri
@@ -72,9 +82,9 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
     nlri.Pack(
         attribute_pb2.SRPolicyNLRI(
             color=color,
-            distinguisher=444,
-            endpoint=bytes(map(int, endpoint_device.split("."))),
-            length=96,
+            distinguisher=666,
+            endpoint=bytes(ipv6_to_intlist(endpoint_device)),
+            length=192,
         )
     )
 
@@ -98,7 +108,6 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
             address=target_device, local_admin=1, sub_type=0x02, is_transitive=False
         )
     )
-
     communities = Any()
     communities.Pack(
         attribute_pb2.ExtendedCommunitiesAttribute(
@@ -119,11 +128,12 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
 
     # generic segment lbl
     sid_list = label_update(sid_list)
+
     for n in sid_list:
         segment = Any()
         segment.Pack(
             attribute_pb2.SegmentTypeA(
-                flags=attribute_pb2.SegmentFlags(v_flag=False, a_flag=False, s_flag=False), label=n
+                flags=attribute_pb2.SegmentFlags(v_flag=False, a_flag=False, s_flag=False, b_flag=False), label=n
             )
         )
         segments.append(segment)
@@ -131,13 +141,15 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
     seglist = Any()
     seglist.Pack(
         attribute_pb2.TunnelEncapSubTLVSRSegmentList(
-            weight=attribute_pb2.SRWeight(flags=0, weight=1),
+            weight=attribute_pb2.SRWeight(flags=0, weight=12),
             segments=segments,
         )
     )
+
     # pref
     pref = Any()
-    pref.Pack(attribute_pb2.TunnelEncapSubTLVSRPreference(flags=0, preference=200))
+    pref.Pack(attribute_pb2.TunnelEncapSubTLVSRPreference(flags=0, preference=11))
+
     # path name not used for now
     cpn = Any()
     cpn.Pack(
@@ -148,8 +160,9 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
     # priority not used for now
     pri = Any()
     pri.Pack(attribute_pb2.TunnelEncapSubTLVSRPriority(priority=10))
-    tun = Any()
 
+
+    tun = Any()
     # generate tunnel
     tun.Pack(
         attribute_pb2.TunnelEncapAttribute(
@@ -185,17 +198,57 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
 
 
 if __name__ == "__main__":
-    nh = "172.27.100.105"  # gobgp ip
-    endpoint_device = "5.5.5.5"  # https://datatracker.ietf.org/doc/html/draft-ietf-idr-segment-routing-te-policy-16#section-2.3
-    color = 100
-    target_device = "1.1.1.1"  # intended head-ends for the advertised SR Policy update
-    bsid_value = 10010  # bsid
-    sid_list = [10020, 10030]  # label stack [10020(S=0), 10030(S=1)]
-    go_bgp_subnet(
-        color,
-        endpoint_device=endpoint_device,
-        target_device=target_device,
-        bsid_value=bsid_value,
-        sid_list=sid_list,
-        nh=nh,
-    )
+    #read ipv6 endpoint addresses
+    f = open("v6_ep.txt", "r")
+    v6_eps = f.read()
+    v6_ep_list = v6_eps.split(",\n")
+    del(v6_ep_list[-1])
+    print(v6_ep_list)
+
+    LSP_NUM = len(v6_ep_list) #total lsp number
+    print(LSP_NUM)
+
+    
+    #Send 4* different lsp with 4* different (colors, [starting labels]) for 1* endpoint
+    for current_color in [100,200,300,400]:
+
+        #initiate
+        current_lsp = 0 # current lsp no. start from the first one
+    
+        #static value
+        nh = "2001:1::5"
+        target_device = "1.1.1.1"
+        bsid_value = 10000 #it could be any value, not used actually
+        x = 116001
+        current_labels = [x, 136001]
+
+
+        #loop
+        while current_lsp < LSP_NUM:
+            #fetch current lsp endpoint
+            v6_ep = v6_ep_list[current_lsp]
+
+
+            #do check - print current lsp no.
+            print("current_lsp is", current_lsp)
+            print("current color is", current_color)
+            print("current label is", current_labels)
+            print("current ep is", v6_ep, type(v6_ep))
+        
+            
+            #do work - call function go_bgp_subnet
+            go_bgp_subnet(
+                color=current_color,
+                endpoint_device=v6_ep,
+                target_device=target_device,
+                bsid_value=bsid_value,
+                sid_list=current_labels,
+                nh=nh,
+            )
+            
+
+            #goto next loop
+            current_lsp +=1
+            x +=1
+            current_labels = [x, 136001]
+

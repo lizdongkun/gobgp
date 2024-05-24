@@ -158,7 +158,7 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
                     type=15,
                     tlvs=[
                         pref,
-                        # bsid,
+                         bsid,
                         seglist,
                         # cpn,
                         # pri,
@@ -186,11 +186,11 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
 
 if __name__ == "__main__":
     nh = "172.27.100.105"  # gobgp ip
-    endpoint_device = "5.5.5.5"  # https://datatracker.ietf.org/doc/html/draft-ietf-idr-segment-routing-te-policy-16#section-2.3
+    endpoint_device = "4.1.0.1"  # https://datatracker.ietf.org/doc/html/draft-ietf-idr-segment-routing-te-policy-16#section-2.3
     color = 100
     target_device = "1.1.1.1"  # intended head-ends for the advertised SR Policy update
-    bsid_value = 10010  # bsid
-    sid_list = [10020, 10030]  # label stack [10020(S=0), 10030(S=1)]
+    bsid_value = 1010101  # bsid
+    sid_list = [114001,134001,194001,104,105,106,107,108]  # label stack [10020(S=0), 10030(S=1)]
     go_bgp_subnet(
         color,
         endpoint_device=endpoint_device,

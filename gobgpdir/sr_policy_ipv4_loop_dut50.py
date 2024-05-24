@@ -12,7 +12,6 @@ import attribute_pb2
 
 _TIMEOUT_SECONDS = 1000
 
-
 #added by kun: label processing and update to carry ttl and s_flag information
 def label_offset12(label):
     loop = 1
@@ -36,7 +35,6 @@ def label_update(labels):
         result.append(label)
         loop +=1
     return result
-
 
 
 def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, nh):
@@ -123,7 +121,7 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
         segment = Any()
         segment.Pack(
             attribute_pb2.SegmentTypeA(
-                flags=attribute_pb2.SegmentFlags(v_flag=False, a_flag=False, s_flag=False), label=n
+                flags=attribute_pb2.SegmentFlags(v_flag=False, a_flag=False, s_flag=False, b_flag=False), label=n
             )
         )
         segments.append(segment)
@@ -185,17 +183,53 @@ def go_bgp_subnet(color, endpoint_device, target_device, sid_list, bsid_value, n
 
 
 if __name__ == "__main__":
-    nh = "172.27.100.105"  # gobgp ip
-    endpoint_device = "5.5.5.5"  # https://datatracker.ietf.org/doc/html/draft-ietf-idr-segment-routing-te-policy-16#section-2.3
-    color = 100
-    target_device = "1.1.1.1"  # intended head-ends for the advertised SR Policy update
-    bsid_value = 10010  # bsid
-    sid_list = [10020, 10030]  # label stack [10020(S=0), 10030(S=1)]
-    go_bgp_subnet(
-        color,
-        endpoint_device=endpoint_device,
-        target_device=target_device,
-        bsid_value=bsid_value,
-        sid_list=sid_list,
-        nh=nh,
-    )
+    #read ipv4 endpoint addresses
+    f = open("v4_ep.txt", "r")
+    v4_eps = f.read()
+    v4_ep_list = v4_eps.split(",\n")
+    del(v4_ep_list[-1])
+    print(v4_ep_list)
+
+    LSP_NUM = len(v4_ep_list) #total lsp number
+    print(LSP_NUM)
+
+
+    #Send 4* different lsp with 4* different (colors, [starting labels]) for 1* endpoint
+    for current_color in [100,200,300,400]: 
+
+        #initiate
+        current_lsp = 0 # current lsp no. start from the first one
+
+        #static value
+        nh = "172.27.100.105"
+        target_device = "1.1.1.1"
+        bsid_value = 10000 #it could be any value, not used actually
+        x = 114001
+        current_labels = [x, 134001]
+
+        #loop
+        while current_lsp < LSP_NUM:
+            #fetch current lsp endpoint
+            v4_ep = v4_ep_list[current_lsp] #different endpoints provided by txt file
+
+            
+            #do check - print current lsp information
+            print("current_lsp is", current_lsp)
+            print("current color is", int(current_color))
+            print("current label is", current_labels)
+            print("current ep is", v4_ep, type(v4_ep))
+            
+            #do work - call function go_bgp_subnet
+            go_bgp_subnet(
+                color=current_color,
+                endpoint_device=v4_ep,
+                target_device=target_device,
+                bsid_value=bsid_value,
+                sid_list=current_labels,
+                nh=nh,
+            )
+            
+            #goto next
+            current_lsp +=1
+            x +=1
+            current_labels = [x, 134001]
