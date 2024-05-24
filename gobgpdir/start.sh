@@ -1,3 +1,3 @@
 #!/bin/bash
 
-./gobgpd -f ./gobgp-vm103.toml -l debug -p
+./gobgpd -f ./gobgp-dut-50.toml -l debug -p
